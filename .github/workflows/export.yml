@@ -1,0 +1,51 @@
+name: QuickSight Export
+
+on:
+  schedule:
+    # 03:00 UTC = 10:00 AM WIB (Indonesia)
+    - cron: "0 3 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run export
+        env:
+          QS_USERNAME: ${{ secrets.QS_USERNAME }}
+          QS_PASSWORD: ${{ secrets.QS_PASSWORD }}
+          SMTP_HOST: smtp.office365.com
+          SMTP_PORT: "587"
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+        run: node export_quicksight.js --timeout-ms 30000
+
+      - name: Upload debug artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-artifacts
+          path: debug/
+          retention-days: 7
+
+      - name: Upload downloaded export as artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quicksight-export
+          path: downloads/
+          retention-days: 14
