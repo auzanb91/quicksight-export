@@ -126,15 +126,30 @@ async function login(page, username, password, timeout) {
 async function switchToSheet(page, sheetName, timeout) {
   if (!sheetName) return;
   const tab = page.getByText(sheetName, { exact: true }).first();
-  if ((await tab.count()) === 0) {
-    console.log(`Sheet tab '${sheetName}' not found — assuming it's already active.`);
-    return;
+
+  // Sheet tabs can still be rendering right after the initial page load, so a
+  // single immediate count() check can race ahead of them and wrongly conclude
+  // the tab doesn't exist, silently leaving whatever sheet happened to load
+  // (e.g. the user's last-viewed sheet) active instead of switching to it.
+  const deadline = Date.now() + Math.max(timeout, 10000);
+  let found = false;
+  while (Date.now() < deadline) {
+    if ((await tab.count()) > 0) {
+      found = true;
+      break;
+    }
+    await page.waitForTimeout(500);
   }
-  try {
-    await tab.click({ force: true, timeout });
-  } catch (e) {
-    console.log(`Could not click sheet tab '${sheetName}': ${e.message}`);
+
+  if (!found) {
+    await dumpDebug(page, "sheet-tab-not-found");
+    throw new Error(
+      `Could not find sheet tab '${sheetName}' after waiting. The dashboard may still be ` +
+        "loading, or the sheet name may be wrong. Check debug/ screenshot."
+    );
   }
+
+  await tab.click({ force: true, timeout });
 }
 
 async function findTableContainer(page, tableName, timeout) {
@@ -240,25 +255,51 @@ async function openExportMenu(page, container, timeout) {
   console.log("Opened the visual's options menu.");
 }
 
+// The page contains hidden feature-flag/metadata elements whose text happens to
+// match our search regexes (e.g. a hidden div with the flag name
+// "qbs_capability_exporttoexcel", which matches /export.*excel/i). page.getByText()
+// matches in DOM order regardless of visibility, so a plain .first() can lock onto
+// one of these hidden elements and wait forever for it to become visible. Scan all
+// matches and only consider ones that are actually visible/clickable.
+async function findFirstVisibleByText(page, regex, timeout) {
+  const locator = page.getByText(regex);
+  const deadline = Date.now() + timeout;
+  do {
+    const count = await locator.count();
+    for (let i = 0; i < count; i++) {
+      const candidate = locator.nth(i);
+      if (await candidate.isVisible()) return candidate;
+    }
+    await page.waitForTimeout(200);
+  } while (Date.now() < deadline);
+  return null;
+}
+
 async function clickExportToExcel(page, timeout) {
-  const directItem = page.getByText(/export.*excel/i).first();
-  if ((await directItem.count()) > 0) {
+  const directItem = await findFirstVisibleByText(page, /export.*excel/i, timeout);
+  if (directItem) {
     await directItem.click({ timeout });
     return;
   }
 
-  const exportParent = page.getByText(/^export to$/i).first();
-  if ((await exportParent.count()) > 0) {
+  const exportParent = await findFirstVisibleByText(page, /^export to$/i, timeout);
+  if (exportParent) {
     await exportParent.hover({ timeout });
-    const excelItem = page.getByText(/excel/i).first();
-    await excelItem.waitFor({ state: "visible", timeout });
+    const excelItem = await findFirstVisibleByText(page, /excel/i, timeout);
+    if (!excelItem) {
+      await dumpDebug(page, "no-excel-submenu-item");
+      throw new Error(
+        "Found 'Export to' but no visible 'Excel' submenu item appeared after hovering. " +
+          "Check debug/ screenshot."
+      );
+    }
     await excelItem.click({ timeout });
     return;
   }
 
   await dumpDebug(page, "no-export-excel-item");
   throw new Error(
-    "Could not find an 'Export to Excel' menu item. Check debug/ screenshot " +
+    "Could not find a visible 'Export to Excel' menu item. Check debug/ screenshot " +
       "to see what the open menu actually contains."
   );
 }
