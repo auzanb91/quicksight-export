@@ -37,7 +37,7 @@ const { chromium } = require("playwright");
 const DEFAULT_URL =
   "https://ap-south-1.quicksight.aws.amazon.com/sn/account/shpf-in-farmrise-analytics" +
   "/dashboards/63bd0601-26e9-4bfa-ab23-741db24b93d5" +
-  "/views/8ecd3e5f-4a02-4a76-ad4e-43578d227149";
+  "/views/eb8ddaf8-6acd-4ffd-be92-e98570881464";
 
 const DEBUG_DIR = path.join(__dirname, "debug");
 
@@ -380,7 +380,11 @@ async function main() {
     console.log(`Saved export to: ${dest}`);
 
     if (args.sendEmail) {
-      await sendEmail(dest);
+      try {
+        await sendEmail(dest);
+      } catch (e) {
+        console.error(`WARNING: export succeeded but emailing it failed: ${e.message}`);
+      }
     }
   } catch (e) {
     console.error(`FAILED: ${e.message}`);

@@ -43,7 +43,7 @@ jobs:
           retention-days: 7
 
       - name: Upload downloaded export as artifact
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: quicksight-export
