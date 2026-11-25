@@ -23,7 +23,7 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Run export
+      - name: Run export (Uer Details)
         env:
           QS_USERNAME: ${{ secrets.QS_USERNAME }}
           QS_PASSWORD: ${{ secrets.QS_PASSWORD }}
@@ -33,6 +33,17 @@ jobs:
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           MAIL_TO: ${{ secrets.MAIL_TO }}
         run: node export_quicksight.js --timeout-ms 30000
+
+      - name: Run export (User Scan Data)
+        env:
+          QS_USERNAME: ${{ secrets.QS_USERNAME }}
+          QS_PASSWORD: ${{ secrets.QS_PASSWORD }}
+        run: >
+          node export_quicksight.js --timeout-ms 30000
+          --url "https://ap-south-1.quicksight.aws.amazon.com/sn/account/shpf-in-farmrise-analytics/dashboards/eac07294-f6df-415a-ab46-0d3c61439688/views/086eeee4-fedf-4664-82b3-59bdcc87eadf"
+          --sheet-name ""
+          --table-name "User Scan Data"
+          --no-email
 
       - name: Upload debug artifacts on failure
         if: failure()
