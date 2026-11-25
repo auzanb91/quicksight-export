@@ -179,7 +179,10 @@ async function listVisualTitlesOnCurrentSheet(page, timeout) {
   for (let i = 0; i < maxAttempts; i++) {
     await page.evaluate(() => {
       const el = document.querySelector(".scrollable-sheet-view");
-      if (el) el.scrollTop = el.scrollHeight;
+      if (el) {
+        el.scrollTop = el.scrollHeight;
+        el.scrollLeft = el.scrollWidth;
+      }
     });
     await page.waitForTimeout(1500);
   }
@@ -239,7 +242,10 @@ async function findTableContainer(page, tableName, timeout) {
     if (titleLocator) break;
     await page.evaluate(() => {
       const el = document.querySelector(".scrollable-sheet-view");
-      if (el) el.scrollTop = el.scrollHeight;
+      if (el) {
+        el.scrollTop = el.scrollHeight;
+        el.scrollLeft = el.scrollWidth;
+      }
     });
     await page.waitForTimeout(2000);
   }
