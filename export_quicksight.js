@@ -154,17 +154,26 @@ async function switchToSheet(page, sheetName, timeout) {
 
 async function findTableContainer(page, tableName, timeout) {
   const pattern = new RegExp(tableName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-  const titleLocator = page.getByText(pattern).first();
+  const locator = page.getByText(pattern);
 
   // QuickSight lazy-loads visuals as the sheet's inner scroll container grows,
   // so the table title may not exist in the DOM yet even well after page load.
+  // The page can also contain multiple matches for the same text (e.g. a
+  // transient "New data present for visual X" toast, or an aria-label) that
+  // appear earlier in the DOM than the actual visible title but never become
+  // visible themselves — so scan all matches rather than just the first.
   const maxAttempts = 20;
-  let found = false;
-  for (let i = 0; i < maxAttempts; i++) {
-    if ((await titleLocator.count()) > 0 && (await titleLocator.isVisible())) {
-      found = true;
-      break;
+  let titleLocator = null;
+  for (let i = 0; i < maxAttempts && !titleLocator; i++) {
+    const count = await locator.count();
+    for (let j = 0; j < count; j++) {
+      const candidate = locator.nth(j);
+      if (await candidate.isVisible()) {
+        titleLocator = candidate;
+        break;
+      }
     }
+    if (titleLocator) break;
     await page.evaluate(() => {
       const el = document.querySelector(".scrollable-sheet-view");
       if (el) el.scrollTop = el.scrollHeight;
@@ -172,12 +181,12 @@ async function findTableContainer(page, tableName, timeout) {
     await page.waitForTimeout(2000);
   }
 
-  if (!found) {
+  if (!titleLocator) {
     await dumpDebug(page, "table-title-not-found");
     throw new Error(
-      `Could not find any element with text matching '${tableName}' on the dashboard after ` +
-        `scrolling through the sheet. The table may be named differently, on a different sheet, ` +
-        "or still loading. Check debug/ screenshot."
+      `Could not find any visible element with text matching '${tableName}' on the dashboard ` +
+        `after scrolling through the sheet. The table may be named differently, on a different ` +
+        "sheet, or still loading. Check debug/ screenshot."
     );
   }
 
