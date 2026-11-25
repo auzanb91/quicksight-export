@@ -347,32 +347,47 @@ async function findFirstVisibleByText(page, regex, timeout) {
   return null;
 }
 
-async function clickExportToExcel(page, timeout) {
-  const directItem = await findFirstVisibleByText(page, /export.*excel/i, timeout);
-  if (directItem) {
-    await directItem.click({ timeout });
-    return;
-  }
+// Tables offer "Export to Excel"; charts (line/pie/etc.) only offer "Export to
+// CSV" — there's no Excel option for them at all. Try Excel first (preferred
+// when available), then fall back to CSV so chart visuals can still be
+// exported. Each probe uses a short timeout so a visual lacking one option
+// doesn't waste the full budget before trying the next.
+async function clickExportToFile(page, timeout) {
+  const probeTimeout = Math.min(timeout, 5000);
 
-  const exportParent = await findFirstVisibleByText(page, /^export to$/i, timeout);
-  if (exportParent) {
-    await exportParent.hover({ timeout });
-    const excelItem = await findFirstVisibleByText(page, /excel/i, timeout);
-    if (!excelItem) {
-      await dumpDebug(page, "no-excel-submenu-item");
-      throw new Error(
-        "Found 'Export to' but no visible 'Excel' submenu item appeared after hovering. " +
-          "Check debug/ screenshot."
-      );
-    }
+  const excelItem = await findFirstVisibleByText(page, /export.*excel/i, probeTimeout);
+  if (excelItem) {
     await excelItem.click({ timeout });
     return;
   }
 
-  await dumpDebug(page, "no-export-excel-item");
+  const csvItem = await findFirstVisibleByText(page, /export to csv/i, probeTimeout);
+  if (csvItem) {
+    await csvItem.click({ timeout });
+    return;
+  }
+
+  const exportParent = await findFirstVisibleByText(page, /^export to$/i, probeTimeout);
+  if (exportParent) {
+    await exportParent.hover({ timeout });
+    const submenuItem =
+      (await findFirstVisibleByText(page, /excel/i, probeTimeout)) ||
+      (await findFirstVisibleByText(page, /csv/i, probeTimeout));
+    if (!submenuItem) {
+      await dumpDebug(page, "no-export-submenu-item");
+      throw new Error(
+        "Found 'Export to' but no visible Excel/CSV submenu item appeared after hovering. " +
+          "Check debug/ screenshot."
+      );
+    }
+    await submenuItem.click({ timeout });
+    return;
+  }
+
+  await dumpDebug(page, "no-export-item");
   throw new Error(
-    "Could not find a visible 'Export to Excel' menu item. Check debug/ screenshot " +
-      "to see what the open menu actually contains."
+    "Could not find a visible 'Export to Excel' or 'Export to CSV' menu item. Check debug/ " +
+      "screenshot to see what the open menu actually contains."
   );
 }
 
@@ -446,10 +461,10 @@ async function main() {
 
     await openExportMenu(page, container, args.timeoutMs);
 
-    console.log("Clicking Export to Excel...");
+    console.log("Clicking Export to Excel/CSV...");
     const [download] = await Promise.all([
       page.waitForEvent("download", { timeout: args.timeoutMs * 2 }),
-      clickExportToExcel(page, args.timeoutMs),
+      clickExportToFile(page, args.timeoutMs),
     ]);
 
     const dest = path.join(args.outDir, download.suggestedFilename());
