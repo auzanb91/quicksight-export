@@ -1,0 +1,118 @@
+name: QuickSight Weekly Export
+
+on:
+  schedule:
+    # 21:00 UTC Sunday = 04:00 AM WIB Monday (Indonesia)
+    - cron: "0 21 * * 0"
+  workflow_dispatch: {}
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run export (Feature Wise - per hour)
+        env:
+          QS_USERNAME: ${{ secrets.QS_USERNAME }}
+          QS_PASSWORD: ${{ secrets.QS_PASSWORD }}
+        run: >
+          node export_quicksight.js --timeout-ms 30000
+          --url "https://ap-south-1.quicksight.aws.amazon.com/sn/account/shpf-in-farmrise-analytics/dashboards/79c5fe89-1fc6-4843-918b-9d6fcc8a07b4/views/4112bf65-b604-4a76-af83-019652a7296d"
+          --sheet-name ""
+          --table-name "Unique users feature wise per hour"
+          --no-email
+
+      - name: Run export (Feature Wise - week wise)
+        env:
+          QS_USERNAME: ${{ secrets.QS_USERNAME }}
+          QS_PASSWORD: ${{ secrets.QS_PASSWORD }}
+        run: >
+          node export_quicksight.js --timeout-ms 30000
+          --url "https://ap-south-1.quicksight.aws.amazon.com/sn/account/shpf-in-farmrise-analytics/dashboards/79c5fe89-1fc6-4843-918b-9d6fcc8a07b4/views/4112bf65-b604-4a76-af83-019652a7296d"
+          --sheet-name ""
+          --table-name "Unique users feature week wise"
+          --no-email
+
+      - name: Run export (App Retention - weekly)
+        env:
+          QS_USERNAME: ${{ secrets.QS_USERNAME }}
+          QS_PASSWORD: ${{ secrets.QS_PASSWORD }}
+        run: >
+          node export_quicksight.js --timeout-ms 30000
+          --url "https://ap-south-1.quicksight.aws.amazon.com/sn/account/shpf-in-farmrise-analytics/dashboards/c198a5d7-8087-404d-9203-a19fb2dbf592/views/201bf389-425f-4806-9f53-f096610eb3f5"
+          --sheet-name ""
+          --table-name "Weekly Retention"
+          --no-email
+
+      - name: Run export (App Retention - day retention)
+        env:
+          QS_USERNAME: ${{ secrets.QS_USERNAME }}
+          QS_PASSWORD: ${{ secrets.QS_PASSWORD }}
+        run: >
+          node export_quicksight.js --timeout-ms 30000
+          --url "https://ap-south-1.quicksight.aws.amazon.com/sn/account/shpf-in-farmrise-analytics/dashboards/c198a5d7-8087-404d-9203-a19fb2dbf592/views/201bf389-425f-4806-9f53-f096610eb3f5"
+          --sheet-name ""
+          --table-name "Day Retention"
+          --no-email
+
+      - name: Run export (User Engagement - DAU Trend)
+        continue-on-error: true
+        env:
+          QS_USERNAME: ${{ secrets.QS_USERNAME }}
+          QS_PASSWORD: ${{ secrets.QS_PASSWORD }}
+        run: >
+          node export_quicksight.js --timeout-ms 30000
+          --url "https://ap-south-1.quicksight.aws.amazon.com/sn/account/shpf-in-farmrise-analytics/dashboards/88505058-54da-4352-809f-9c50ccfca345/views/bc456641-77ce-4156-8ef4-dde13550644f"
+          --sheet-name "Existing and New Users"
+          --table-name "DAU Trend"
+          --no-email
+
+      - name: Run export (User Engagement - WAU Trend)
+        env:
+          QS_USERNAME: ${{ secrets.QS_USERNAME }}
+          QS_PASSWORD: ${{ secrets.QS_PASSWORD }}
+        run: >
+          node export_quicksight.js --timeout-ms 30000
+          --url "https://ap-south-1.quicksight.aws.amazon.com/sn/account/shpf-in-farmrise-analytics/dashboards/88505058-54da-4352-809f-9c50ccfca345/views/bc456641-77ce-4156-8ef4-dde13550644f"
+          --sheet-name "Existing and New Users"
+          --table-name "WAU Trend"
+          --no-email
+
+      - name: Run export (User Engagement - MAU Trend)
+        env:
+          QS_USERNAME: ${{ secrets.QS_USERNAME }}
+          QS_PASSWORD: ${{ secrets.QS_PASSWORD }}
+        run: >
+          node export_quicksight.js --timeout-ms 30000
+          --url "https://ap-south-1.quicksight.aws.amazon.com/sn/account/shpf-in-farmrise-analytics/dashboards/88505058-54da-4352-809f-9c50ccfca345/views/bc456641-77ce-4156-8ef4-dde13550644f"
+          --sheet-name "Existing and New Users"
+          --table-name "MAU Trend"
+          --no-email
+
+      - name: Upload debug artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-debug-artifacts
+          path: debug/
+          retention-days: 7
+
+      - name: Upload downloaded exports as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quicksight-weekly-export
+          path: downloads/
+          retention-days: 14
