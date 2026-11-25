@@ -1,0 +1,41 @@
+name: QuickSight List Visuals
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Dashboard view URL to inspect"
+        required: true
+        type: string
+
+jobs:
+  list-visuals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: List sheets and visuals
+        env:
+          QS_USERNAME: ${{ secrets.QS_USERNAME }}
+          QS_PASSWORD: ${{ secrets.QS_PASSWORD }}
+        run: >
+          node export_quicksight.js --url "${{ inputs.url }}" --list-visuals --timeout-ms 30000
+
+      - name: Upload debug artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-artifacts
+          path: debug/
+          retention-days: 7

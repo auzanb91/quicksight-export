@@ -50,6 +50,7 @@ function parseArgs(argv) {
     headed: false,
     timeoutMs: 20000,
     sendEmail: true,
+    listVisuals: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -60,6 +61,7 @@ function parseArgs(argv) {
     else if (a === "--headed") args.headed = true;
     else if (a === "--timeout-ms") args.timeoutMs = parseInt(argv[++i], 10);
     else if (a === "--no-email") args.sendEmail = false;
+    else if (a === "--list-visuals") args.listVisuals = true;
   }
   return args;
 }
@@ -150,6 +152,67 @@ async function switchToSheet(page, sheetName, timeout) {
   }
 
   await tab.click({ force: true, timeout });
+}
+
+async function discoverSheetNames(page) {
+  // The sheet tab bar exposes each tab's exact name via data-automation-context,
+  // which is far more reliable than scraping visible tab label text.
+  const tabNameEls = page.locator(
+    '[role="tablist"][aria-label="Sheets"] [data-automation-context]'
+  );
+  const count = await tabNameEls.count();
+  const names = [];
+  for (let i = 0; i < count; i++) {
+    const name = await tabNameEls.nth(i).getAttribute("data-automation-context");
+    if (name && !names.includes(name)) names.push(name);
+  }
+  return names;
+}
+
+async function listVisualTitlesOnCurrentSheet(page, timeout) {
+  // Visual titles carry a reliable data-automation-context attribute too (see
+  // findTableContainer's comment on why plain text-matching is fragile here).
+  const titleEls = page.locator('[data-automation-id="analysis_visual_title_label"]');
+
+  // Scroll through the sheet's lazy-loaded visuals the same way findTableContainer does.
+  const maxAttempts = 10;
+  for (let i = 0; i < maxAttempts; i++) {
+    await page.evaluate(() => {
+      const el = document.querySelector(".scrollable-sheet-view");
+      if (el) el.scrollTop = el.scrollHeight;
+    });
+    await page.waitForTimeout(1500);
+  }
+
+  const count = await titleEls.count();
+  const titles = [];
+  for (let i = 0; i < count; i++) {
+    const el = titleEls.nth(i);
+    if (!(await el.isVisible())) continue;
+    const name = (await el.getAttribute("data-automation-context")) || (await el.innerText());
+    if (name && !titles.includes(name)) titles.push(name);
+  }
+  return titles;
+}
+
+async function listSheetsAndVisuals(page, timeout) {
+  const sheetNames = await discoverSheetNames(page);
+
+  if (sheetNames.length === 0) {
+    console.log("No sheet tabs found (single-sheet dashboard, or tab bar not rendered).");
+    const titles = await listVisualTitlesOnCurrentSheet(page, timeout);
+    console.log("Visuals on the current sheet:");
+    for (const t of titles) console.log(`  - ${t}`);
+    return;
+  }
+
+  for (const sheetName of sheetNames) {
+    console.log(`\nSheet "${sheetName}":`);
+    await switchToSheet(page, sheetName, timeout);
+    await page.waitForTimeout(2000);
+    const titles = await listVisualTitlesOnCurrentSheet(page, timeout);
+    for (const t of titles) console.log(`  - ${t}`);
+  }
 }
 
 async function findTableContainer(page, tableName, timeout) {
@@ -369,6 +432,11 @@ async function main() {
     }
     // Give the dashboard's visuals time to start lazy-loading before we look for anything.
     await page.waitForTimeout(15000);
+
+    if (args.listVisuals) {
+      await listSheetsAndVisuals(page, args.timeoutMs);
+      return;
+    }
 
     await switchToSheet(page, args.sheetName, args.timeoutMs);
     await page.waitForTimeout(3000);
