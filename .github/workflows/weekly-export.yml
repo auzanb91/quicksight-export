@@ -90,17 +90,6 @@ jobs:
           --table-name "WAU Trend"
           --no-email
 
-      - name: Run export (User Engagement - MAU Trend)
-        env:
-          QS_USERNAME: ${{ secrets.QS_USERNAME }}
-          QS_PASSWORD: ${{ secrets.QS_PASSWORD }}
-        run: >
-          node export_quicksight.js --timeout-ms 30000
-          --url "https://ap-south-1.quicksight.aws.amazon.com/sn/account/shpf-in-farmrise-analytics/dashboards/88505058-54da-4352-809f-9c50ccfca345/views/bc456641-77ce-4156-8ef4-dde13550644f"
-          --sheet-name "Existing and New Users"
-          --table-name "MAU Trend"
-          --no-email
-
       - name: Upload debug artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
